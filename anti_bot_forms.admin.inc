@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Administration pages.
+ */
+
+/**
  * Admin settings form.
  */
 function anti_bot_forms_settings() {

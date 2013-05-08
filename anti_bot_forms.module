@@ -15,7 +15,7 @@ function anti_bot_forms_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('anti_bot_forms_settings'),
     'access arguments' => array('administer site configuration'),
-    'file' => 'anti_bot_forms.admin.inc'
+    'file' => 'anti_bot_forms.admin.inc',
   );
   return $items;
 }
@@ -66,8 +66,11 @@ function anti_bot_forms_anti_bot_forms_functions() {
  * Manipulate the form in order to prevent bots from submitting it.
  *
  * @param array $form
+ *   The form.
  * @param array $form_state
+ *   The form state.
  * @param string $form_id
+ *   The form ID.
  */
 function anti_bot_forms_generic(&$form, $form_state, $form_id) {
   $nvp = anti_bot_forms_get_values($form_id);
@@ -89,7 +92,9 @@ function anti_bot_forms_generic(&$form, $form_state, $form_id) {
  * correct value.
  *
  * @param array $form
+ *   The form.
  * @param array $form_state
+ *   The form state.
  */
 function anti_bot_forms_generic_validate($form, &$form_state) {
   $form_id = $form_state['values']['form_id'];
@@ -106,8 +111,12 @@ function anti_bot_forms_generic_validate($form, &$form_state) {
  * This is not particularly elegant, but it works.
  *
  * @param string $content
+ *   The current rendered content.
  * @param array $elements
+ *   The elements.
+ *
  * @return string
+ *   Amended rendered content.
  */
 function anti_bot_forms_generic_post_render($content, $elements) {
   preg_match('/<form[^>]*id="([^"]*)"/', $content, $matches_form_id);
@@ -190,4 +199,3 @@ function anti_bot_forms_excluded_form_ids() {
   $ids = preg_split("/\s*,\s*/", $ids);
   return $ids;
 }
-
