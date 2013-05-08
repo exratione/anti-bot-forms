@@ -1,4 +1,4 @@
-﻿-- Summary --
+-- Summary --
 
 Anti-Bot Forms adds a defensive alteration to site forms, requiring the
 user to process Javascript on the page in order for a form to submit without
