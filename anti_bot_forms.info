@@ -1,0 +1,7 @@
+name = Anti-Bot Forms
+description = "Alters site forms to protect them from drive-by submission by common bots."
+package = "Spam control"
+
+configure = admin/config/development/anti-bot-forms
+
+core = 7.x

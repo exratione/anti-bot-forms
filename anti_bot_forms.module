@@ -1,0 +1,193 @@
+<?php
+
+/**
+ * @file
+ * Main module code.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function anti_bot_forms_menu() {
+  $items['admin/config/development/anti-bot-forms'] = array(
+    'title' => 'Anti-bot forms',
+    'description' => 'Configure the Anti-Bot Forms module.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('anti_bot_forms_settings'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'anti_bot_forms.admin.inc'
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Add an additional value to forms that is set by Javascript and must be
+ * present on validation.
+ */
+function anti_bot_forms_form_alter(&$form, $form_state, $form_id) {
+  // As for so very many things associated with ctools and views, trying
+  // to manipulate these forms will only cause issues.
+  if (strpos($form_id, 'views') === 0 || strpos($form_id, 'ctools') === 0) {
+    return;
+  }
+  // Are we skipping this form because it's in the excluded list?
+  $excluded_ids = anti_bot_forms_excluded_form_ids();
+  if (in_array($form_id, $excluded_ids)) {
+    return;
+  }
+  // Otherwise have at it. Pick a random option and run it.
+  $functions = module_invoke_all('anti_bot_forms_functions');
+  drupal_alter('anti_bot_forms_functions', $functions);
+  if (count($functions)) {
+    $key = array_rand($functions);
+    $function = $functions[$key];
+    call_user_func_array($function, array(&$form, $form_state, $form_id));
+  }
+}
+
+/**
+ * Implements anti_bot_forms_functions().
+ */
+function anti_bot_forms_anti_bot_forms_functions() {
+  return array(
+    'anti_bot_forms_generic',
+  );
+}
+
+/*
+ -----------------------------------------------------------------------
+ Generic form protection: add a parameter that is set by Javascript.
+ -----------------------------------------------------------------------
+*/
+
+/**
+ * Manipulate the form in order to prevent bots from submitting it.
+ *
+ * @param array $form
+ * @param array $form_state
+ * @param string $form_id
+ */
+function anti_bot_forms_generic(&$form, $form_state, $form_id) {
+  $nvp = anti_bot_forms_get_values($form_id);
+  // Add the extra field, but give it a junk value.
+  $form[$nvp['name']] = array(
+    '#type' => 'hidden',
+    '#default_value' => $nvp['junk'],
+    // May as well vary the placement.
+    '#weight' => rand(-50, 50),
+  );
+  $form['#post_render'][] = 'anti_bot_forms_generic_post_render';
+  $form['#validate'][] = 'anti_bot_forms_generic_validate';
+}
+
+/**
+ * A validation function for the generic method of protecting forms.
+ *
+ * This simply checks to see that the relevant parameter has been set with the
+ * correct value.
+ *
+ * @param array $form
+ * @param array $form_state
+ */
+function anti_bot_forms_generic_validate($form, &$form_state) {
+  $form_id = $form_state['values']['form_id'];
+  $nvp = anti_bot_forms_get_values($form_id);
+  if ($form_state['values'][$nvp['name']] != $nvp['value']) {
+    $error = variable_get('anti_bot_forms_error_message', '');
+    form_set_error('anti_bot_forms', check_plain($error));
+  }
+}
+
+/**
+ * Append Javascript to the form in a way that will ensure it runs.
+ *
+ * This is not particularly elegant, but it works.
+ *
+ * @param string $content
+ * @param array $elements
+ * @return string
+ */
+function anti_bot_forms_generic_post_render($content, $elements) {
+  preg_match('/<form[^>]*id="([^"]*)"/', $content, $matches_form_id);
+  $form_id = $matches_form_id[1];
+
+  $nvp = anti_bot_forms_get_values($form_id);
+  $content .= '<script type="text/javascript">';
+  $content .= 'jQuery("#' . $form_id .  '")[0].' . $nvp['name'] . '.value = "' . $nvp['value'] . '";';
+  $content .= '</script>';
+  return $content;
+}
+
+/*
+ -----------------------------------------------------------------------
+ Utility functions.
+ -----------------------------------------------------------------------
+*/
+
+/**
+ * Obtain the name and values for a parameter to add to a specific form.
+ *
+ * These are unique for a given form ID. It would be good to be able to
+ * involve time or client IP address as well, but that would be hard to
+ * manage along with caching.
+ *
+ * @param string $form_id
+ *   A form ID.
+ *
+ * @return array
+ *   An array containing name, value, and junk values for the parameter to be
+ *   added to the form.
+ */
+function anti_bot_forms_get_values($form_id) {
+  $name_salt = variable_get('anti_bot_forms_name_salt', 'this is a bad salt - change it');
+  $value_salt = variable_get('anti_bot_forms_value_salt', 'this is also a bad salt - change it');
+
+  // Some of the forms have names that are sometimes dashes, sometimes
+  // underscores, so make it always underscores.
+  $form_id = preg_replace('/\-/', '_', $form_id);
+  // Another special case to resolve.
+  if ($form_id == 'user_login_block') {
+    $form_id = 'user_login_form';
+  }
+
+  $name = md5($name_salt . $form_id);
+  $value = md5($value_salt . $form_id);
+  $junk = md5($name_salt . $value_salt . $form_id);
+  $length = 8;
+
+  return array(
+    'name' => anti_bot_forms_alphaize(substr($name, 0, $length)),
+    'value' => anti_bot_forms_alphaize(substr($value, 0, $length)),
+    'junk' => anti_bot_forms_alphaize(substr($junk, 0, $length)),
+  );
+}
+
+/**
+ * Remove numbers from a string and replace with letters.
+ *
+ * @param string $string
+ *   The string to alphaize.
+ *
+ * @return string
+ *   The alphaized string.
+ */
+function anti_bot_forms_alphaize($string) {
+  $patterns = array('/0/','/1/','/2/','/3/','/4/','/5/','/6/','/7/','/8/','/9/');
+  $replacements = array('a','b','c','d','e','f','c','b','a','e');
+  return preg_replace($patterns, $replacements, $string);
+}
+
+/**
+ * Obtain an array of form IDs that should not be altered.
+ *
+ * @return array
+ *   An array of excluded form IDs.
+ */
+function anti_bot_forms_excluded_form_ids() {
+  $ids = variable_get('anti_bot_forms_excluded_form_ids', '');
+  $ids = preg_split("/\s*,\s*/", $ids);
+  return $ids;
+}
+
